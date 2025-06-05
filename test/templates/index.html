@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>딥페이크 이미지 탐지</h1>
+{% if current_user.is_authenticated %}
+<form action="{{ url_for('main.upload_web') }}" method="post" enctype="multipart/form-data">
+    <input type="file" name="image" accept="image/*, video/*"required>
+    <button type="submit">업로드 및 분석</button>
+</form>
+{% else %}
+<p><a href="{{ url_for('auth.login') }}">로그인</a> 후 이용 가능합니다.</p>
+{% endif %}
+{% endblock %}

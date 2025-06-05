@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>마이페이지</h2>
+
+<p>안녕하세요, {{ current_user.username }}님!</p>
+
+<ul>
+    <li>아이디: {{ current_user.username }}</li>
+    <li>이메일: {{ current_user.email or "등록된 이메일이 없습니다." }}</li>
+    <!-- 필요에 따라 더 사용자 정보 추가 가능 -->
+</ul>
+
+<!-- 예: 비밀번호 변경, 회원 정보 수정 링크 -->
+<p><a href="{{ url_for('auth.change_password') }}">비밀번호 변경</a></p>
+
+{% endblock %}

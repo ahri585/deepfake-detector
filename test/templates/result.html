@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>업로드 결과</title>
+</head>
+<body>
+  <h1>업로드 결과</h1>
+
+  {% if error %}
+    <p style="color: red;"><strong>오류:</strong> {{ error }}</p>
+  {% else %}
+    <p><strong>분석 결과:</strong> {{ result }}</p>
+    <p><strong>업로드한 이미지:</strong></p>
+    <img src="{{ file_path }}" alt="업로드 이미지" style="max-width:400px;" />
+  {% endif %}
+
+  <p><a href="{{ url_for('main.index') }}">다시 업로드 하러 가기</a></p>
+</body>
+</html>
+

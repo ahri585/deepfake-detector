@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>이미지 업로드</title>
+</head>
+<body>
+  <!-- 로그인한 사용자 표시 -->
+  <div style="text-align: right; margin: 10px;">
+    {% if session.get('username') %}
+      <p>환영합니다, <strong>{{ session.get('username') }}</strong> 님!</p>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+      <button type="submit">로그아웃</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <h1>이미지 업로드</h1>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" name="image" required>
+    <button type="submit">업로드</button>
+  </form>
+
+  <h2>결과:</h2>
+  <div id="result"></div>
+  <img id="uploadedImage" style="display:none; max-width: 300px;" />
+
+  <script>
+    document.getElementById("uploadForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+
+      fetch("https://541b-2406-5900-5072-c1-d8d5-cf17-48fe-b07a.ngrok-free.app/upload", {
+        method: "POST",
+        body: formData,
+        credentials: 'include'
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.result) {
+          const resultDiv = document.getElementById("result");
+          const image = document.getElementById("uploadedImage");
+
+          image.src = `${data.file_path}`;
+          image.style.display = "block";
+
+          resultDiv.innerHTML = `
+            <p><strong>분석 결과:</strong> <span style="color: ${data.result.includes('Real') ? 'blue' : 'red'}">${data.result}</span></p>
+          `;
+          alert("업로드가 완료되었습니다!");
+        } else {
+          alert("분석 결과를 받아올 수 없습니다.");
+        }
+      })
+      .catch(err => {
+        console.error("에러:", err);
+        alert("업로드 실패");
+      });
+    });
+  </script>
+</body>
+</html>
+
