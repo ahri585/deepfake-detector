@@ -20,7 +20,7 @@ class DeepFakeDetector(torch.nn.Module):
 # ✅ 장치 설정 및 모델 로드
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = DeepFakeDetector()
-model.load_state_dict(torch.load(r"C:\caps\myproject\test\models\deepfake_efficientnetb3_finetuned.pth", map_location=device))
+model.load_state_dict(torch.load("/home/ubuntu/deepfake-detector/test/models/deepfake_efficientnetb3_finetuned.pth", map_location=device))
 model.eval()
 model.to(device)
 
