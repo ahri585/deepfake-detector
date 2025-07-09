@@ -4,3 +4,4 @@ __pycache__/
 *.log
 log.txt
 instance/database.db
+instance/database.db
