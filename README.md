@@ -1,6 +1,6 @@
 # 🧠 Deepfake Detector (Flask + Gunicorn + Nginx)
 
-이 프로젝트는 이미지 기반 딥페이크 탐지 웹서비스입니다.  
+이 프로젝트는 이미지 기반 딥페이크 탐지 앱,웹서비스입니다.  
 Flask를 기반으로 API 서버를 구성하고, Gunicorn + Nginx로 배포합니다.
 
 ---
