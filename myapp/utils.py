@@ -5,7 +5,10 @@ from flask import request, jsonify, current_app
 import jwt, datetime
 from flask import make_response
 import imghdr
+import logging 
+from PIL import Image
 
+logger = logging.getLogger(__name__)
 # 파일 확장자 체크 함수
 def allowed_file(filename):
     allowed_extensions = {"png", "jpg", "jpeg", "gif"}
@@ -83,25 +86,18 @@ def is_valid_image(file):
     try:
         file.seek(0)
         header_type = imghdr.what(file)
+        logger.debug(f"[DEBUG] imghdr.what = {header_type}")
+
+
         if header_type not in ["jpeg","png"]:
+            logger.debug("허용되지 않는 이미지 타입입니다")
             return False
 
         file.seek(0)
         Image.open(file).verify()
         file.seek(0)
+        logger.debug("PIL 이미지 검증 통과")
         return True
-    except Exception:
+    except Exception as e:
+        logger.exception(f"이미지 유효성 검사 중 오류 발생: {e}")
         return False
-    def is_valid_image(file):
-        try:
-            file.seek(0)
-            header_type = imghdr.what(file)
-            if header_type not in ["jpeg","png"]:
-                return False
-
-            file.seek(0)
-            Image.open(file).verify()
-            file.seek(0)
-            return True
-        except Exception:
-            return False

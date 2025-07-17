@@ -8,6 +8,20 @@ import os,uuid,json,jwt
 from flask_cors import CORS
 from flask_login import login_required, current_user
 from .app_auth import token_required
+import logging
+
+log_dir = "/home/ubuntu/deepfake-detector/logs"
+os.makedirs(log_dir, exist_ok=True)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+if not logger.handlers:
+    file_handler = logging.FileHandler(os.path.join(log_dir, "server.log"))
+    file_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+logger.debug("[ROUTES] routes.py")
 
 main_bp = Blueprint('main', __name__, url_prefix='/api')
 CORS(main_bp)
@@ -20,7 +34,7 @@ upload_folder = '/home/ubuntu/deepfake-detector/myapp/static/uploads'
 if not os.path.exists(upload_folder):
     os.makedirs(upload_folder)
 
-@main_bp.route('/api/upload', methods=['POST'])
+@main_bp.route('/upload', methods=['POST'])
 @token_required
 def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id를 추출해 전달
     text_data = request.form.get("text", "")
@@ -36,14 +50,22 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
         if '.' not in original_filename:
             original_filename +=".jpg"
         original_filename = secure_filename(original_filename)
-        unique_fielname = f"{uuid.uuid4().hex}_{original_filename}"
+        unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
         filepath = os.path.join(upload_folder, unique_filename)
 
         if is_valid_image(file):
+            logger.debug("이미지유효성 검사 통과")
             try:
+                logger.debug(f"파일 저장 위치: {filepath}")
                 file.save(filepath)
+                logger.debug("파일 저장 완료")
+
                 resize_image(filepath)
+                logger.debug("이미지 리사이즈 완료")
+                
+                logger.debug(f"detect_and_classify() 호출 준비: {filepath}")
                 result_label, score, _ = detect_and_classify(filepath)
+                logger.debug(f"분석격롸: label={result_label}, score={score:.4f}")
 
                 if result_label == "NoFace":
                     result = f"[NoFace] 얼굴을 인식할 수 없습니다: '{original_filename}'"
@@ -58,12 +80,13 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
 
                 response_data = {
                     "message": "파일 및 텍스트 업로드 완료",
-                    "file_path": url_for('main.uploaded_file', filename=unique_filename, _external=True),
+                    "file_path": url_for('web.uploaded_file', filename=unique_filename, _external=True),
                     "result": result
                 }
                 return Response(json.dumps(response_data, ensure_ascii=False), mimetype='application/json'), 200
 
             except Exception as e:
+                logger.exception("이미지 처리중 오류 발생")
                 error_msg = f"이미지 처리 중 오류 발생: {str(e)}"
                 return Response(json.dumps({"error": error_msg}, ensure_ascii=False), mimetype='application/json'), 500
 
@@ -74,12 +97,6 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
         new_entry = Image(file_path="text_entry", result=result, user_id=user_id)
         db.session.add(new_entry)
         db.session.commit()
-
-        return Response(json.dumps({"message": "텍스트 저장 완료", "result": result}, ensure_ascii=False), mimetype='application/json'), 201
-
-    return Response(json.dumps({"error": "파일 또는 텍스트를 제공해야 합니다."}, ensure_ascii=False), mimetype='application/json'), 400
-
-
 @web_bp.route('/upload_web', methods=['POST'])
 @login_required
 def upload_web():

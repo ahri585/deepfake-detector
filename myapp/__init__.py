@@ -7,8 +7,18 @@ from .models import db, User
 from flask_login import LoginManager
 from .app_auth import app_auth_bp
 from flask_cors import CORS
-import logging
-logging.basicConfig(level=logging.INFO)
+import logging, os
+log_dir = "/home/ubuntu/deepfake-detector/logs"
+os.makedirs(log_dir, exist_ok=True)
+
+logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(os.path.join(log_dir, "server.log")),
+            logging.StreamHandler()
+            ]
+        )
 
 # Flask-Login 매니저 전역 생성
 login_manager = LoginManager()
