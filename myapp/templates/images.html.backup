@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 30px;">업로드된 이미지 목록</h1>
+
+  <table style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">이미지</th>
+        <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">파일명</th>
+        <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">분석 결과</th>
+        <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">삭제</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in image_entries %}
+        <tr id="image-row-{{ item.id }}">
+          <td style="padding: 10px; border: 1px solid #ddd;">
+            <img src="{{ item.url }}?t={{ loop.index }}" alt="uploaded image" style="max-width: 150px; max-height: 150px;" />
+          </td>
+          <td style="padding: 10px; border: 1px solid #ddd;">{{ item.file_name.split('_', 1)[-1] }}</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">{{ item.result }}</td>
+          <td style="padding: 10px; border: 1px solid #ddd;">
+            <button onclick="deleteImage({{ item.id }})">삭제</button>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    function deleteImage(imageId) {
+      if (confirm("정말 삭제하시겠습니까?")) {
+        fetch(`/delete/${imageId}`, {
+          method: 'DELETE',
+        })
+        .then(response => response.json())
+        .then(data => {
+          alert(data.message || data.error);
+
+          if (data.message) {
+            const tbody = document.querySelector('tbody');
+            tbody.innerHTML = '';
+            data.images.forEach(item => {
+              const row = document.createElement('tr');
+              row.id = `image-row-${item.id}`;
+
+              const imageCell = document.createElement('td');
+              const img = document.createElement('img');
+              img.src = `/uploads/${item.file_name}?t=${Date.now()}`;
+              img.style.maxWidth = '150px';
+              img.style.maxHeight = '150px';
+              imageCell.appendChild(img);
+
+              const nameCell = document.createElement('td');
+              nameCell.textContent = item.file_name.split('_', 1)[1];
+
+              const resultCell = document.createElement('td');
+              resultCell.textContent = item.result;
+
+              const deleteCell = document.createElement('td');
+              const deleteButton = document.createElement('button');
+              deleteButton.textContent = '삭제';
+              deleteButton.onclick = function () { deleteImage(item.id); };
+              deleteCell.appendChild(deleteButton);
+
+              [imageCell, nameCell, resultCell, deleteCell].forEach(cell => {
+                cell.style.padding = '10px';
+                cell.style.border = '1px solid #ddd';
+              });
+
+              row.appendChild(imageCell);
+              row.appendChild(nameCell);
+              row.appendChild(resultCell);
+              row.appendChild(deleteCell);
+
+              tbody.appendChild(row);
+            });
+          }
+        });
+      }
+    }
+  </script>
+{% endblock %}
+

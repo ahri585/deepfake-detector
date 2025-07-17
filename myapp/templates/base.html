@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Holmez</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Gothic+A1&display=swap" rel="stylesheet" />
+
+    <style>
+        body {
+            font-family: 'Gothic A1', sans-serif;
+            background-color: #ffffff;
+            color: #2d572c;
+            margin: 0;
+            padding: 40px 20px;
+            box-sizing: border-box;
+            min-height: 100vh;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        nav a {
+            text-decoration: none;
+            color: #2d572c;
+            margin-right: 16px;
+            font-weight: bold;
+        }
+
+        nav a:hover {
+            text-decoration: underline;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #f0f0f0;
+        }
+
+        .dropbtn {
+            color: #2d572c;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="{{ url_for('web.index') }}">홈</a>
+    {% if current_user.is_authenticated %}
+        <a href="{{ url_for('web.images') }}">이미지</a>
+
+        <div class="dropdown" style="float: right; position: relative; display: inline-block; margin-left: 20px;">
+            <button class="dropbtn" style="background:none; border:none; cursor:pointer; font-size:inherit;">
+                안녕하세요, {{ current_user.username }}님 ▼
+            </button>
+            <div class="dropdown-content" style="
+                display: none;
+                position: absolute;
+                right: 0;
+                background-color: white;
+                min-width: 120px;
+                box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+                z-index: 1;
+                ">
+                <a href="{{ url_for('web.mypage') }}" style="display: block; padding: 8px 12px; text-decoration: none; color: black;">마이페이지</a>
+                <a href="{{ url_for('auth.logout') }}" style="display: block; padding: 8px 12px; text-decoration: none; color: black;">로그아웃</a>
+            </div>
+        </div>
+
+        <script>
+            const dropbtn = document.querySelector('.dropbtn');
+            const dropdownContent = document.querySelector('.dropdown-content');
+
+            dropbtn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                dropdownContent.style.display = dropdownContent.style.display === 'block' ? 'none' : 'block';
+            });
+
+            window.addEventListener('click', function() {
+                dropdownContent.style.display = 'none';
+            });
+        </script>
+
+    {% else %}
+        <a href="{{ url_for('auth.login') }}">로그인</a>
+        <a href="{{ url_for('auth.register') }}">회원가입</a>
+    {% endif %}
+</nav>
+
+<!-- 플래시 메시지 영역 -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      {% if category == 'logout' %}
+        <div style="border: 2px solid #f00; background-color: #fee; padding: 10px; margin-bottom: 10px;">
+          {{ message }}
+        </div>
+      {% else %}
+        <!-- 다른 카테고리는 무시하거나 필요시 스타일 추가 가능 -->
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<hr>
+{% block content %}{% endblock %}
+</body>
+</html>
+
