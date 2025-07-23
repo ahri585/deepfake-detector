@@ -15,9 +15,10 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        email = request.form.get('email')
 
         if not username or not password:
-            flash("아이디와 비밀번호를 모두 입력하세요.")
+            flash("아이디와 비밀번호,이메일을 모두 입력하세요.")
             return redirect(url_for('auth.register'))
 
         user = User.query.filter_by(username=username).first()
@@ -26,7 +27,7 @@ def register():
             return redirect(url_for('auth.register'))
 
         hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-        new_user = User(username=username, password=hashed_password)
+        new_user = User(username=username, password=hashed_password, email=email)
 
         db.session.add(new_user)
         db.session.commit()

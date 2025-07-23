@@ -37,15 +37,16 @@ def api_register():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
+    email = data.get('email')
 
-    if not username or not password:
-        return jsonify({'success': False, 'message': 'Username and password required'}), 400
+    if not username or not password or not email:
+        return jsonify({'success': False, 'message': 'Username, password and email required'}), 400
 
     if User.query.filter_by(username=username).first():
         return jsonify({'success': False, 'message': 'Username already exists'}), 400
 
     hashed_password = generate_password_hash(password)
-    new_user = User(username=username, password=hashed_password)
+    new_user = User(username=username, password=hashed_password, email=email)
     db.session.add(new_user)
     db.session.commit()
 
@@ -72,3 +73,26 @@ def token_required(f):
         return f(current_user_id=current_user_id, *args, **kwargs)
 
     return decorated
+@app_auth_bp.route('/change_password', methods=['POST'])
+@token_required
+def change_password(current_user_id):
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    confirm_password = data.get('confirm_password')
+
+    if not current_password or not new_password or not confirm_password:
+        return jsonify({'success': False, 'message': '모든 비밀번호 필드를 입력해주세요'}), 400
+
+    if new_password != confirm_password:
+        return jsonify({'success': False, 'message': '새 비밀번호가 일치하지 않습니다'}), 400
+
+    user = User.query.get(current_user_id)
+
+    if not user or not user.check_password(current_password):
+        return jsonify({'success': False, 'message': '현재 비밀번호가 올바르지 않습니다'}), 401
+
+    user.password = generate_password_hash(new_password)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': '비밀번호가 성공적으로 변경되었습니다'}), 200

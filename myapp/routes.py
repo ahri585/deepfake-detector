@@ -1,7 +1,7 @@
 from flask import Blueprint, request, Response, send_from_directory, render_template, url_for, session,jsonify,current_app
 from werkzeug.utils import secure_filename
 from .utils import allowed_file, resize_image, nocache, is_valid_image
-from .models import Image, db
+from .models import Image, db, User
 from myapp.ai import detect_and_classify
 from .models import Image as ImageModel
 import os,uuid,json,jwt
@@ -225,3 +225,13 @@ def upload_result():
 
     # file_path는 절대 URL이므로 이미지 src에 바로 사용 가능
     return render_template('result.html', file_path=file_path, result=result)
+
+@main_bp.route('/mypage', methods=['GET'])
+@token_required
+def get_user_info(current_user_id):
+    user = User.query.get(current_user_id)
+    return jsonify({
+        "username": user.username,
+        "email": user.email,
+    })
+

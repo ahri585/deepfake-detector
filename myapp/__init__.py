@@ -3,7 +3,7 @@ from flask import Flask
 from flask_migrate import Migrate
 from .auth import auth_bp
 from .routes import main_bp, web_bp
-from .models import db, User
+from .models import db, User, Image
 from flask_login import LoginManager
 from .app_auth import app_auth_bp
 from flask_cors import CORS
