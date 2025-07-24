@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Deepfake Detector",
+  "version": "1.0",
+  "description": "이미지를 딥페이크 여부로 분석",
+  "permissions": ["contextMenus", "activeTab", "storage","notifications"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

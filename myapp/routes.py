@@ -235,3 +235,83 @@ def get_user_info(current_user_id):
         "email": user.email,
     })
 
+@web_bp.route('/extension')
+@login_required
+def extension():
+    return render_template('extension.html')
+
+@main_bp.route('/detect', methods=['POST'])
+def detect_from_url():
+    data = request.get_json()
+    image_url = data.get("image_url")
+
+    if not image_url:
+        return jsonify({"error": "No image URL provided"}), 400
+
+    try:
+        # 이미지 다운로드
+        import requests
+        response = requests.get(image_url, timeout=10)
+        if response.status_code != 200:
+            return jsonify({"error": "이미지 다운로드 실패"}), 400
+
+        # 저장 후 분석
+        temp_path = os.path.join(upload_folder, f"{uuid.uuid4().hex}.jpg")
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+
+        resize_image(temp_path)
+        result_label, score, _ = detect_and_classify(temp_path)
+
+        result = "얼굴 없음" if result_label == "NoFace" else f"{result_label} (score: {score:.4f})"
+        return jsonify({"status": "ok", "result": result}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"처리 중 오류: {str(e)}"}), 500
+
+@main_bp.route('/detect-upload', methods=['POST'])
+def detect_upload():
+    img_path = None
+
+    if "image" in request.files:  # 파일 업로드 방식
+        file = request.files["image"]
+        if file.filename == "":
+            return jsonify({"error": "파일 이름이 없습니다"}), 400
+
+        # 저장
+        filepath = os.path.join(upload_folder, file.filename)
+        file.save(filepath)
+        img_path = filepath
+
+    elif "image_url" in request.form:  # URL 방식
+        img_url = request.form.get("image_url")
+        if not img_url:
+            return jsonify({"error": "이미지 URL이 없습니다"}), 400
+
+        response = requests.get(img_url)
+        if response.status_code != 200:
+            return jsonify({"error": "이미지 다운로드 실패"}), 400
+
+        # URL 이미지 저장
+        filename = f"url_{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(upload_folder, filename)
+        with open(filepath, "wb") as f:
+            f.write(response.content)
+        img_path = filepath
+
+    else:
+        return jsonify({"error": "이미지가 없습니다"}), 400
+
+    # 모델 분석
+    resize_image(img_path)
+    result_label, score, _ = detect_and_classify(img_path)
+
+    if result_label == "NoFace":
+        result = "얼굴을 인식할 수 없습니다."
+    elif result_label == "Error":
+        result = "이미지 분석 중 오류 발생"
+    else:
+        result = f"{result_label} (score: {score:.4f})"
+
+    return jsonify({"result": result, "label": result_label, "score": round(float(score), 4)})
+

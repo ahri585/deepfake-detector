@@ -53,6 +53,7 @@
     {% if current_user.is_authenticated %}
         <a href="{{ url_for('web.images') }}">이미지</a>
 
+	<a href="{{ url_for('web.extension') }}" style="margin-left: 16px; font-weight: bold; color: #2d572c;">크롬 확장 설치</a>
         <div class="dropdown" style="float: right; position: relative; display: inline-block; margin-left: 20px;">
             <button class="dropbtn" style="background:none; border:none; cursor:pointer; font-size:inherit;">
                 안녕하세요, {{ current_user.username }}님 ▼
