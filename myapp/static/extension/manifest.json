@@ -1,18 +1,28 @@
 {
   "manifest_version": 3,
   "name": "Deepfake Detector",
-  "version": "1.1",
+  "version": "1.2",
   "description": "이미지를 Flask API로 보내 딥페이크 여부를 확인합니다.",
   "permissions": [
     "contextMenus",
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://aiholmez.com/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["result.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
 

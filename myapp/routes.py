@@ -8,7 +8,7 @@ import os,uuid,json,jwt
 from flask_cors import CORS
 from flask_login import login_required, current_user
 from .app_auth import token_required
-import logging
+import logging,requests
 
 log_dir = "/home/ubuntu/deepfake-detector/logs"
 os.makedirs(log_dir, exist_ok=True)
@@ -273,45 +273,58 @@ def detect_from_url():
 def detect_upload():
     img_path = None
 
-    if "image" in request.files:  # 파일 업로드 방식
-        file = request.files["image"]
-        if file.filename == "":
-            return jsonify({"error": "파일 이름이 없습니다"}), 400
+    try:
+        # ✅ 파일 업로드 방식
+        if "image" in request.files:
+            file = request.files["image"]
+            if file.filename == "":
+                return jsonify({"error": "파일 이름이 없습니다"}), 400
 
-        # 저장
-        filepath = os.path.join(upload_folder, file.filename)
-        file.save(filepath)
-        img_path = filepath
+            filepath = os.path.join(upload_folder, file.filename)
+            file.save(filepath)
+            img_path = filepath
 
-    elif "image_url" in request.form:  # URL 방식
-        img_url = request.form.get("image_url")
-        if not img_url:
-            return jsonify({"error": "이미지 URL이 없습니다"}), 400
+        # ✅ URL 방식
+        elif "image_url" in request.form:
+            img_url = request.form.get("image_url")
+            if not img_url:
+                return jsonify({"error": "이미지 URL이 없습니다"}), 400
 
-        response = requests.get(img_url)
-        if response.status_code != 200:
-            return jsonify({"error": "이미지 다운로드 실패"}), 400
+            # 이미지 다운로드 (403 방지: User-Agent 추가)
+            try:
+                headers = {"User-Agent": "Mozilla/5.0"}
+                response = requests.get(img_url, headers=headers, timeout=8)
+                response.raise_for_status()
+            except Exception as e:
+                return jsonify({"error": f"이미지 다운로드 실패: {str(e)}"}), 400
 
-        # URL 이미지 저장
-        filename = f"url_{uuid.uuid4().hex}.jpg"
-        filepath = os.path.join(upload_folder, filename)
-        with open(filepath, "wb") as f:
-            f.write(response.content)
-        img_path = filepath
+            # URL 이미지 저장
+            filename = f"url_{uuid.uuid4().hex}.jpg"
+            filepath = os.path.join(upload_folder, filename)
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+            img_path = filepath
 
-    else:
-        return jsonify({"error": "이미지가 없습니다"}), 400
+        else:
+            return jsonify({"error": "이미지가 없습니다"}), 400
 
-    # 모델 분석
-    resize_image(img_path)
-    result_label, score, _ = detect_and_classify(img_path)
+        # ✅ 모델 분석
+        try:
+            resize_image(img_path)
+            result_label, score, _ = detect_and_classify(img_path)
+        except Exception as e:
+            app.logger.error(f"모델 분석 중 예외 발생: {e}")
+            return jsonify({"error": f"모델 분석 실패: {str(e)}"}), 500
 
-    if result_label == "NoFace":
-        result = "얼굴을 인식할 수 없습니다."
-    elif result_label == "Error":
-        result = "이미지 분석 중 오류 발생"
-    else:
-        result = f"{result_label} (score: {score:.4f})"
+        # ✅ 결과 처리
+        if result_label == "NoFace":
+            return jsonify({"label": "NoFace", "result": "얼굴을 인식할 수 없습니다.", "score": 0.0})
+        elif result_label == "Error":
+            return jsonify({"label": "Error", "result": "이미지 분석 중 오류 발생", "score": 0.0})
 
-    return jsonify({"result": result, "label": result_label, "score": round(float(score), 4)})
+        return jsonify({"label": result_label, "result": result_label, "score": round(float(score), 4)})
+
+    except Exception as e:
+        app.logger.error(f"detect_upload 함수에서 예외 발생: {e}")
+        return jsonify({"error": f"서버 내부 오류: {str(e)}"}), 500
 
