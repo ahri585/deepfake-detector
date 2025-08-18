@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>여러 장 판별 (원페이지)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+    .drop { border: 2px dashed #bbb; border-radius: 12px; padding: 24px; text-align: center; color:#666; }
+    .drop.drag { border-color:#555; color:#222; }
+    #files { margin: 12px 0; }
+    button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background:#111; color:#fff; cursor:pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #eee; padding: 8px; font-size: 14px; text-align:left; }
+    th { background:#fafafa; }
+    .badge { padding:2px 8px; border-radius:999px; font-size:12px; display:inline-block; }
+    .Real { background:#e7f7ee; color:#0b7a34; }
+    .Fake { background:#fdeeee; color:#b21616; }
+    .Uncertain { background:#fff8e6; color:#8a5a00; }
+    .NoFace { background:#eef3ff; color:#21428f; }
+    .Error { background:#f3f3f3; color:#444; }
+    .muted { color:#666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>여러 장 판별</h1>
+  <div class="muted">드래그&드롭 또는 파일 선택 → 분석 버튼 클릭. (체크 시 분석 후 서버 파일 삭제)</div>
+
+  <label style="display:block;margin:8px 0;">
+    <input id="cleanup" type="checkbox" /> 분석 후 서버 파일 삭제
+  </label>
+
+  <div id="drop" class="drop">
+    파일을 여기로 드래그 앤 드롭<br/>또는 <input id="pick" type="file" accept="image/*" multiple />
+  </div>
+
+  <div id="files" class="muted">선택된 파일 없음</div>
+  <button id="analyze">분석</button>
+
+  <div id="out" style="display:none;">
+    <h2>요약</h2>
+    <div id="summary"></div>
+    <h3>결과</h3>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const drop = document.getElementById('drop');
+    const pick = document.getElementById('pick');
+    const filesDiv = document.getElementById('files');
+    const analyzeBtn = document.getElementById('analyze');
+    const cleanupChk = document.getElementById('cleanup');
+    const out = document.getElementById('out');
+    const summaryDiv = document.getElementById('summary');
+    const resultsDiv = document.getElementById('results');
+
+    let files = [];
+
+    function renderFiles() {
+      filesDiv.textContent = files.length ? files.map(f => f.name).join(", ") : "선택된 파일 없음";
+    }
+
+    pick.addEventListener('change', e => {
+      files = Array.from(e.target.files);
+      renderFiles();
+    });
+
+    ;['dragenter','dragover'].forEach(ev =>
+      drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); })
+    );
+    ;['dragleave','drop'].forEach(ev =>
+      drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); })
+    );
+    drop.addEventListener('drop', e => {
+      const incoming = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+      files = incoming;
+      renderFiles();
+    });
+
+    function badge(label){ return `<span class="badge ${label}">${label}</span>` }
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!files.length) { alert('파일을 선택하세요'); return; }
+      const fd = new FormData();
+      files.forEach(f => fd.append('images', f));
+      if (cleanupChk.checked) fd.append('cleanup', 'true');
+
+      summaryDiv.innerHTML = '분석 중...';
+      resultsDiv.innerHTML = '';
+      out.style.display = 'block';
+
+      try {
+        const resp = await fetch('/api/detect-multi', { method:'POST', body: fd });
+        if (!resp.ok) throw new Error('API 오류: ' + resp.status);
+        const data = await resp.json();
+
+        const c = (data.summary && data.summary.counts) || {};
+        summaryDiv.innerHTML = `
+          총 <b>${data.summary?.total ?? 0}</b>개 ·
+          Real: <b>${c.Real||0}</b>,
+          Fake: <b>${c.Fake||0}</b>,
+          Uncertain: <b>${c.Uncertain||0}</b>,
+          NoFace: <b>${c.NoFace||0}</b>,
+          Error: <b>${c.Error||0}</b>
+        `;
+
+        const rows = data.results || [];
+        if (!rows.length) { resultsDiv.textContent = '결과 없음'; return; }
+        resultsDiv.innerHTML = `
+          <table>
+            <thead><tr><th>#</th><th>Label</th><th>Score</th><th>미리보기</th><th>파일</th></tr></thead>
+            <tbody>
+              ${rows.map((r,i)=>`
+                <tr>
+                  <td>${i+1}</td>
+                  <td>${badge(r.label)}</td>
+                  <td>${(r.score ?? 0).toFixed(3)}</td>
+                  <td>${r.url ? `<img src="${r.url}" style="height:48px;border-radius:6px;">` : '-'}</td>
+                  <td>${r.filename || r.file || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (e) {
+        summaryDiv.innerHTML = `<span style="color:#b21616;">에러: ${e.message}</span>`;
+      }
+    });
+  </script>
+</body>
+</html>
+

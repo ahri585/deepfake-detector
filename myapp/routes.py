@@ -2,7 +2,7 @@ from flask import Blueprint, request, Response, send_from_directory, render_temp
 from werkzeug.utils import secure_filename
 from .utils import allowed_file, resize_image, nocache, is_valid_image
 from .models import Image, db, User
-from myapp.ai import detect_and_classify
+from .ai import detect_and_classify
 from .models import Image as ImageModel
 import os,uuid,json,jwt
 from flask_cors import CORS
@@ -326,5 +326,96 @@ def detect_upload():
 
     except Exception as e:
         app.logger.error(f"detect_upload 함수에서 예외 발생: {e}")
+        return jsonify({"error": f"서버 내부 오류: {str(e)}"}), 500
+
+
+
+
+
+
+
+
+@web_bp.route('/multi', methods=['GET'])
+def multi_page():
+    return render_template('multi.html')
+
+
+
+
+@main_bp.route('/detect-multi', methods=['POST'])
+def detect_multi():
+    results = []
+    try:
+        # 폼에서 넘어온 cleanup 옵션 (체크박스 on → true)
+        cleanup = (request.form.get('cleanup', '').lower() in ['1','true','on','yes'])
+
+        if "images" not in request.files:
+            return jsonify({"error": "업로드된 이미지가 없습니다."}), 400
+
+        files = request.files.getlist("images")
+        if not files:
+            return jsonify({"error": "파일이 비어있습니다."}), 400
+
+        for file in files:
+            if file.filename == "":
+                results.append({"filename": None, "label": "Error", "score": 0.0, "result": "파일 이름 없음"})
+                continue
+
+            filename = secure_filename(file.filename)
+            unique = f"{uuid.uuid4().hex}_{filename}"
+            filepath = os.path.join(upload_folder, unique)
+            file.save(filepath)
+
+            try:
+                resize_image(filepath)
+            except Exception as e:
+                current_app.logger.warning(f"[multi] resize 실패: {e}")
+
+            try:
+                result_label, score, _ = detect_and_classify(filepath)
+
+                # 요청이 cleanup이면 파일 삭제
+                if cleanup:
+                    try:
+                        os.remove(filepath)
+                    except Exception as e:
+                        current_app.logger.warning(f"[multi] 파일 삭제 실패: {e}")
+
+                if result_label == "NoFace":
+                    result = "얼굴을 인식할 수 없습니다."
+                elif result_label == "Error":
+                    result = "이미지 분석 중 오류 발생"
+                else:
+                    result = f"{result_label} (score: {score:.4f})"
+
+                results.append({
+                    "filename": filename,
+                    "label": result_label,
+                    "score": round(float(score), 4),
+                    "result": result,
+                    # 미리보기는 cleanup 아닐 때만 제공
+                    "url": None if cleanup else url_for('web.uploaded_file', filename=unique, _external=True)
+                })
+            except Exception as e:
+                results.append({
+                    "filename": filename,
+                    "label": "Error",
+                    "score": 0.0,
+                    "result": f"처리 오류: {str(e)}"
+                })
+
+        summary = {
+            "total": len(results),
+            "counts": {
+                "Real": sum(1 for r in results if r["label"] == "Real"),
+                "Fake": sum(1 for r in results if r["label"] == "Fake"),
+                "Uncertain": sum(1 for r in results if r["label"] == "Uncertain"),
+                "NoFace": sum(1 for r in results if r["label"] == "NoFace"),
+                "Error": sum(1 for r in results if r["label"] == "Error"),
+            }
+        }
+        return jsonify({"summary": summary, "results": results}), 200
+
+    except Exception as e:
         return jsonify({"error": f"서버 내부 오류: {str(e)}"}), 500
 
