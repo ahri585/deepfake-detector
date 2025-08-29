@@ -13,53 +13,29 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        # 1) 폼 값
-        username = (request.form.get('username') or '').strip()
-        password = request.form.get('password') or ''
-        confirm  = request.form.get('confirm_password') or ''
-        email    = (request.form.get('email') or '').strip()
-        agree    = request.form.get('agree_terms')  # 체크시 "on", 미체크시 None
+        username = request.form.get('username')
+        password = request.form.get('password')
+        email = request.form.get('email')
 
-        # 2) 기본 검증
-        if not username or not password or not email:
-            flash("아이디, 비밀번호, 이메일을 모두 입력하세요.")
+        if not username or not password:
+            flash("아이디와 비밀번호,이메일을 모두 입력하세요.")
             return redirect(url_for('auth.register'))
 
-        if password != confirm:
-            flash("비밀번호가 서로 일치하지 않습니다.")
-            return redirect(url_for('auth.register'))
-
-        if agree is None:
-            flash("약관에 동의해 주세요.")
-            return redirect(url_for('auth.register'))
-
-        # 3) 중복 확인
-        if User.query.filter_by(username=username).first():
+        user = User.query.filter_by(username=username).first()
+        if user:
             flash("이미 존재하는 아이디입니다.")
             return redirect(url_for('auth.register'))
 
-        # (선택) 이메일이 unique인 경우 중복 체크
-        if hasattr(User, 'email') and User.query.filter_by(email=email).first():
-            flash("이미 사용 중인 이메일입니다.")
-            return redirect(url_for('auth.register'))
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_password, email=email)
 
-        # 4) 생성 & 커밋
-        try:
-            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-            new_user = User(username=username, password=hashed_password, email=email)
-            db.session.add(new_user)
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            flash("회원가입 처리 중 오류가 발생했습니다. 다시 시도해 주세요.")
-            return redirect(url_for('auth.register'))
+        db.session.add(new_user)
+        db.session.commit()
 
         flash("회원가입 완료! 로그인 해주세요.")
         return redirect(url_for('auth.login'))
 
-    # GET
     return render_template('register.html')
-
 
 # 비밀번호 초기화
 @nocache

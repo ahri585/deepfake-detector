@@ -1,21 +1,61 @@
 {% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+  .auth-wrap{max-width:720px;margin:40px auto}
+  .auth-title{font-size:34px;font-weight:900;color:#2d572c;text-align:center;margin-bottom:22px}
+  .auth-form{display:grid;grid-template-columns:220px 1fr;gap:14px 18px;align-items:center}
+  .auth-label{justify-self:end;color:#1f3f20;font-weight:700}
+  .auth-input{width:100%;padding:12px 14px;border-radius:14px;border:none;background:#cfe3c6;outline:none;font-size:15px}
+  .auth-help{grid-column:1/-1;text-align:center;margin-top:8px;color:#64748b;font-size:13px}
+  .flash-list{list-style:none;padding:0;margin:0 0 12px}
+  .flash-list li{background:#fde2e2;color:#991b1b;border-radius:10px;padding:10px 12px;margin-bottom:6px}
+  .btn-row{display:flex;justify-content:center;gap:10px;margin-top:12px}
+  .auth-btn{padding:12px 22px;border-radius:12px;border:none;background:#d9d9d9;color:#1f3f20;font-weight:800;cursor:pointer}
+  .auth-btn:hover{filter:brightness(0.95)}
+  .auth-btn.secondary{background:#cde2c1}
+  @media (max-width:640px){ .auth-form{grid-template-columns:1fr} .auth-label{justify-self:start} }
+</style>
+{% endblock %}
+
 {% block content %}
-  <h2>로그인</h2>
+<div class="auth-wrap">
+  <h1 class="auth-title">로그인</h1>
+
+  {# 플래시 메시지 #}
   {% with messages = get_flashed_messages() %}
     {% if messages %}
-      <ul>
-      {% for message in messages %}
-        <li>{{ message }}</li>
-      {% endfor %}
+      <ul class="flash-list">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
       </ul>
     {% endif %}
   {% endwith %}
-  <form method="post">
-    <label>아이디: <input type="text" name="username"></label><br>
-    <label>비밀번호: <input type="password" name="password"></label><br>
-    <button type="submit">로그인</button>
+
+  {# 입력 폼 #}
+  <form id="loginForm" class="auth-form" action="{{ url_for('auth.login') }}" method="post" novalidate>
+    <label class="auth-label" for="username">아이디</label>
+    <input class="auth-input" id="username" name="username" type="text" required autocomplete="username" placeholder="아이디를 입력하세요">
+
+    <label class="auth-label" for="password">비밀번호</label>
+    <input class="auth-input" id="password" name="password" type="password" required autocomplete="current-password" placeholder="비밀번호를 입력하세요">
+
+    <div class="auth-help">
+      계정이 없나요? <a href="{{ url_for('auth.register') }}" style="color:#2d572c;font-weight:700">회원가입</a>
+    </div>
   </form>
-  <form action="{{ url_for('auth.forgot_password') }}" method="get" style="display: inline;">
-    <button type="submit" class="btn">비밀번호 초기화</button>
-  </form>
+
+  {# 버튼 행 (중앙 정렬) #}
+  <div class="btn-row">
+    <!-- 로그인: loginForm을 제출 -->
+    <button class="auth-btn" type="submit" form="loginForm">로그인</button>
+
+    <!-- 비밀번호 초기화: 별도 GET 폼 -->
+    <form action="{{ url_for('auth.forgot_password') }}" method="get">
+      <button type="submit" class="auth-btn secondary">비밀번호 초기화</button>
+    </form>
+  </div>
+</div>
 {% endblock %}
+

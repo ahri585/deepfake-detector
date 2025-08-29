@@ -1,19 +1,122 @@
 {% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+  .auth-wrap{max-width:720px;margin:40px auto}
+  .auth-title{font-size:34px;font-weight:900;color:#2d572c;text-align:center;margin-bottom:22px}
+  .auth-form{display:grid;grid-template-columns:220px 1fr;gap:14px 18px;align-items:center}
+  .auth-label{justify-self:end;color:#1f3f20;font-weight:700}
+  .auth-input{width:100%;padding:12px 14px;border-radius:14px;border:none;background:#cfe3c6;outline:none;font-size:15px}
+  .auth-btn{grid-column:1/-1;justify-self:center;margin-top:10px;
+            padding:12px 22px;border-radius:12px;border:none;background:#d9d9d9;color:#1f3f20;font-weight:800;cursor:pointer}
+  .auth-btn:hover{filter:brightness(0.95)}
+  .auth-help{grid-column:1/-1;text-align:center;margin-top:8px;color:#64748b;font-size:13px}
+  .flash-list{grid-column:1/-1;list-style:none;padding:0;margin:0 0 8px}
+  .flash-list li{background:#fde2e2;color:#991b1b;border-radius:10px;padding:10px 12px;margin-bottom:6px}
+  .terms-row{grid-column:1/-1;display:flex;gap:10px;align-items:center;justify-content:center;margin-top:4px}
+  .err{grid-column:1/-1;color:#b91c1c;font-size:13px;margin:-4px 0 2px;text-align:center;display:none}
+  @media (max-width:640px){ .auth-form{grid-template-columns:1fr} .auth-label{justify-self:start} }
+</style>
+{% endblock %}
+
 {% block content %}
-  <h1>회원가입</h1>
+<div class="auth-wrap">
+  <h1 class="auth-title">회원가입</h1>
+
+  {# 플래시 메시지 #}
   {% with messages = get_flashed_messages() %}
     {% if messages %}
-      <ul>
-      {% for message in messages %}
-        <li>{{ message }}</li>
-      {% endfor %}
+      <ul class="flash-list">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
       </ul>
     {% endif %}
   {% endwith %}
-  <form method="post">
-    <label>아이디: <input type="text" name="username"></label><br>
-    <label>비밀번호: <input type="password" name="password"></label><br>
-    <label>이메일:<input type="email" name="email"></label><br>
-    <button type="submit">회원가입</button>
+
+  <form id="registerForm" class="auth-form" action="{{ url_for('auth.register') }}" method="post" novalidate>
+    <label class="auth-label" for="username">아이디</label>
+    <input class="auth-input" id="username" name="username" type="text" required autocomplete="username" placeholder="아이디를 입력하세요">
+
+    <label class="auth-label" for="password">비밀번호</label>
+    <input class="auth-input" id="password" name="password" type="password" required autocomplete="new-password" placeholder="8자 이상 권장">
+
+    <label class="auth-label" for="confirm_password">비밀번호 확인</label>
+    <input class="auth-input" id="confirm_password" name="confirm_password" type="password" required autocomplete="new-password" placeholder="비밀번호를 다시 입력하세요">
+
+    <label class="auth-label" for="email">이메일</label>
+    <input class="auth-input" id="email" name="email" type="email" autocomplete="email" placeholder="example@domain.com">
+
+    <!-- 오류 메시지 표시 -->
+    <div id="errMsg" class="err">오류 메시지</div>
+
+    <!-- 약관 동의 -->
+    <div class="terms-row">
+      <input id="agree_terms" name="agree_terms" type="checkbox" required>
+      <label for="agree_terms" style="user-select:none;">
+        <span style="font-weight:700;color:#1f3f20">서비스 약관</span> 및
+        <span style="font-weight:700;color:#1f3f20">개인정보 처리방침</span>에 동의합니다.
+      </label>
+    </div>
+
+    <div class="auth-help">
+      이미 계정이 있나요? <a href="{{ url_for('auth.login') }}" style="color:#2d572c;font-weight:700">로그인</a>
+    </div>
+
+    <button class="auth-btn" type="submit">회원가입</button>
   </form>
+</div>
+
+<script>
+  (function(){
+    const form = document.getElementById('registerForm');
+    const pwd = document.getElementById('password');
+    const pwd2 = document.getElementById('confirm_password');
+    const terms = document.getElementById('agree_terms');
+    const err = document.getElementById('errMsg');
+
+    function showError(msg){
+      err.textContent = msg;
+      err.style.display = 'block';
+    }
+    function hideError(){
+      err.style.display = 'none';
+      err.textContent = '';
+    }
+
+    function validate(){
+      hideError();
+      if (!pwd.value || !pwd2.value) {
+        showError('비밀번호를 입력해 주세요.');
+        return false;
+      }
+      if (pwd.value !== pwd2.value) {
+        showError('비밀번호가 서로 일치하지 않습니다.');
+        return false;
+      }
+      if (!terms.checked) {
+        showError('약관에 동의해 주세요.');
+        return false;
+      }
+      return true;
+    }
+
+    // 실시간 확인
+    pwd2.addEventListener('input', () => {
+      if (pwd.value && pwd2.value && pwd.value !== pwd2.value) {
+        showError('비밀번호가 서로 일치하지 않습니다.');
+      } else {
+        hideError();
+      }
+    });
+    terms.addEventListener('change', hideError);
+
+    form.addEventListener('submit', (e) => {
+      if (!validate()) {
+        e.preventDefault();
+      }
+    });
+  })();
+</script>
 {% endblock %}
+
