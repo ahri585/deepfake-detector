@@ -1,14 +1,15 @@
-from flask import Blueprint, request, Response, send_from_directory, render_template, url_for, session,jsonify,current_app
+from flask import Blueprint, request, Response, send_from_directory, render_template, url_for, session, jsonify, current_app
 from werkzeug.utils import secure_filename
-from .utils import allowed_file, resize_image, nocache, is_valid_image
+from .utils import allowed_file, nocache, is_valid_image  # resize_image 제거 상태 유지
 from .models import Image, db, User
 from .ai import detect_and_classify
 from .models import Image as ImageModel
-import os,uuid,json,jwt
+import os, uuid, json, jwt
 from flask_cors import CORS
 from flask_login import login_required, current_user
 from .app_auth import token_required
-import logging,requests
+import logging, requests
+from datetime import datetime
 
 log_dir = "/home/ubuntu/deepfake-detector/logs"
 os.makedirs(log_dir, exist_ok=True)
@@ -21,18 +22,17 @@ if not logger.handlers:
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-logger.debug("[ROUTES] routes.py")
+logger.debug("[ROUTES] routes.py (unified: detect-upload only)")
 
 main_bp = Blueprint('main', __name__, url_prefix='/api')
 CORS(main_bp)
 
-web_bp = Blueprint('web',__name__)
+web_bp = Blueprint('web', __name__)
 CORS(web_bp)
 
 upload_folder = '/home/ubuntu/deepfake-detector/myapp/static/uploads'
+os.makedirs(upload_folder, exist_ok=True)
 
-if not os.path.exists(upload_folder):
-    os.makedirs(upload_folder)
 
 @main_bp.route('/upload', methods=['POST'])
 @token_required
@@ -48,7 +48,7 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
 
         original_filename = file.filename
         if '.' not in original_filename:
-            original_filename +=".jpg"
+            original_filename += ".jpg"
         original_filename = secure_filename(original_filename)
         unique_filename = f"{uuid.uuid4().hex}_{original_filename}"
         filepath = os.path.join(upload_folder, unique_filename)
@@ -60,12 +60,9 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
                 file.save(filepath)
                 logger.debug("파일 저장 완료")
 
-                resize_image(filepath)
-                logger.debug("이미지 리사이즈 완료")
-                
                 logger.debug(f"detect_and_classify() 호출 준비: {filepath}")
                 result_label, score, _ = detect_and_classify(filepath)
-                logger.debug(f"분석격롸: label={result_label}, score={score:.4f}")
+                logger.debug(f"분석결과: label={result_label}, score={score:.4f}")
 
                 if result_label == "NoFace":
                     result = f"[NoFace] 얼굴을 인식할 수 없습니다: '{original_filename}'"
@@ -97,6 +94,9 @@ def upload_app(current_user_id):  # <- token_required 데코레이터가 user_id
         new_entry = Image(file_path="text_entry", result=result, user_id=user_id)
         db.session.add(new_entry)
         db.session.commit()
+        return Response(json.dumps({"message": "텍스트 업로드 완료", "result": result}, ensure_ascii=False), mimetype='application/json'), 200
+
+
 @web_bp.route('/upload_web', methods=['POST'])
 @login_required
 def upload_web():
@@ -123,7 +123,7 @@ def upload_web():
 
         try:
             file.save(filepath)
-            resize_image(filepath)
+
             result_label, score, _ = detect_and_classify(filepath)
 
             if result_label == "NoFace":
@@ -154,10 +154,10 @@ def upload_web():
                            file_path=None)
 
 
-
 @web_bp.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(upload_folder, filename)
+
 
 @nocache
 @web_bp.route('/images')
@@ -215,8 +215,6 @@ def index():
 def mypage():
     return render_template('mypage.html')
 
-from flask import request, render_template, url_for
-
 
 @web_bp.route('/upload_result')
 def upload_result():
@@ -225,6 +223,7 @@ def upload_result():
 
     # file_path는 절대 URL이므로 이미지 src에 바로 사용 가능
     return render_template('result.html', file_path=file_path, result=result)
+
 
 @main_bp.route('/mypage', methods=['GET'])
 @token_required
@@ -235,104 +234,120 @@ def get_user_info(current_user_id):
         "email": user.email,
     })
 
+
 @web_bp.route('/extension')
 @login_required
 def extension():
     return render_template('extension.html')
 
-@main_bp.route('/detect', methods=['POST'])
-def detect_from_url():
-    data = request.get_json()
-    image_url = data.get("image_url")
 
-    if not image_url:
-        return jsonify({"error": "No image URL provided"}), 400
-
-    try:
-        # 이미지 다운로드
-        import requests
-        response = requests.get(image_url, timeout=10)
-        if response.status_code != 200:
-            return jsonify({"error": "이미지 다운로드 실패"}), 400
-
-        # 저장 후 분석
-        temp_path = os.path.join(upload_folder, f"{uuid.uuid4().hex}.jpg")
-        with open(temp_path, "wb") as f:
-            f.write(response.content)
-
-        resize_image(temp_path)
-        result_label, score, _ = detect_and_classify(temp_path)
-
-        result = "얼굴 없음" if result_label == "NoFace" else f"{result_label} (score: {score:.4f})"
-        return jsonify({"status": "ok", "result": result}), 200
-
-    except Exception as e:
-        return jsonify({"error": f"처리 중 오류: {str(e)}"}), 500
-
+# ============================
+#  통합 엔드포인트 (파일 + URL)
+#  POST /api/detect-upload
+# ============================
 @main_bp.route('/detect-upload', methods=['POST'])
 def detect_upload():
     img_path = None
-
+    saved_rel_path = None  # static 기준 상대경로
     try:
-        # ✅ 파일 업로드 방식
+        # 1) 파일 업로드
         if "image" in request.files:
             file = request.files["image"]
-            if file.filename == "":
-                return jsonify({"error": "파일 이름이 없습니다"}), 400
+            if not file or file.filename == "":
+                return jsonify({"ok": False, "error": "파일 이름이 없습니다"}), 400
 
-            filepath = os.path.join(upload_folder, file.filename)
+            original = secure_filename(file.filename)
+            name, ext = os.path.splitext(original)
+            if not ext:
+                ext = ".jpg"
+
+            filename = f"{uuid.uuid4().hex}{ext.lower()}"
+            # 업로드 폴더: <project>/static/uploads/2025-09-07
+            date_folder = datetime.utcnow().strftime("%Y-%m-%d")
+            save_dir = os.path.join(current_app.static_folder, "uploads", date_folder)
+            os.makedirs(save_dir, exist_ok=True)
+
+            filepath = os.path.join(save_dir, filename)
             file.save(filepath)
             img_path = filepath
+            saved_rel_path = f"uploads/{date_folder}/{filename}"  # static 기준
 
-        # ✅ URL 방식
+        # 2) URL 업로드(FormData: image_url)
         elif "image_url" in request.form:
-            img_url = request.form.get("image_url")
+            img_url = request.form.get("image_url", "").strip()
             if not img_url:
-                return jsonify({"error": "이미지 URL이 없습니다"}), 400
+                return jsonify({"ok": False, "error": "이미지 URL이 없습니다"}), 400
 
-            # 이미지 다운로드 (403 방지: User-Agent 추가)
             try:
-                headers = {"User-Agent": "Mozilla/5.0"}
-                response = requests.get(img_url, headers=headers, timeout=8)
-                response.raise_for_status()
+                headers = {
+                    "User-Agent": "Mozilla/5.0",
+                    # 필요하면 Referer 도메인 조건부 추가
+                    # "Referer": img_url_origin
+                }
+                r = requests.get(img_url, headers=headers, timeout=8)
+                r.raise_for_status()
             except Exception as e:
-                return jsonify({"error": f"이미지 다운로드 실패: {str(e)}"}), 400
+                return jsonify({"ok": False, "error": f"이미지 다운로드 실패: {e}"}), 400
 
-            # URL 이미지 저장
-            filename = f"url_{uuid.uuid4().hex}.jpg"
-            filepath = os.path.join(upload_folder, filename)
+            ext = guess_ext_from_headers_or_url(r.headers.get("Content-Type"), img_url)  # 아래 util로 커버
+            filename = f"url_{uuid.uuid4().hex}{ext}"
+
+            date_folder = datetime.utcnow().strftime("%Y-%m-%d")
+            save_dir = os.path.join(current_app.static_folder, "uploads", date_folder)
+            os.makedirs(save_dir, exist_ok=True)
+
+            filepath = os.path.join(save_dir, filename)
             with open(filepath, "wb") as f:
-                f.write(response.content)
+                f.write(r.content)
             img_path = filepath
+            saved_rel_path = f"uploads/{date_folder}/{filename}"
 
         else:
-            return jsonify({"error": "이미지가 없습니다"}), 400
+            return jsonify({"ok": False, "error": "이미지가 없습니다"}), 400
 
-        # ✅ 모델 분석
+        # 3) 모델 분석
         try:
-            resize_image(img_path)
             result_label, score, _ = detect_and_classify(img_path)
         except Exception as e:
-            app.logger.error(f"모델 분석 중 예외 발생: {e}")
-            return jsonify({"error": f"모델 분석 실패: {str(e)}"}), 500
+            current_app.logger.exception("모델 분석 중 예외")
+            return jsonify({"ok": False, "error": f"모델 분석 실패: {e}"}), 500
 
-        # ✅ 결과 처리
+        # 4) 응답(★ preview_url 포함)
+        preview_url = url_for('static', filename=saved_rel_path, _external=True)
+
         if result_label == "NoFace":
-            return jsonify({"label": "NoFace", "result": "얼굴을 인식할 수 없습니다.", "score": 0.0})
+            return jsonify({"ok": True, "label": "NoFace", "result": "얼굴을 인식할 수 없습니다.",
+                            "score": 0.0, "preview_url": preview_url})
         elif result_label == "Error":
-            return jsonify({"label": "Error", "result": "이미지 분석 중 오류 발생", "score": 0.0})
-
-        return jsonify({"label": result_label, "result": result_label, "score": round(float(score), 4)})
-
+            return jsonify({"ok": False, "label": "Error", "result": "이미지 분석 중 오류 발생",
+                            "score": 0.0, "preview_url": preview_url})
+        else:
+            return jsonify({"ok": True, "label": result_label, "result": result_label,
+                            "score": round(float(score), 4), "preview_url": preview_url})
     except Exception as e:
-        app.logger.error(f"detect_upload 함수에서 예외 발생: {e}")
-        return jsonify({"error": f"서버 내부 오류: {str(e)}"}), 500
+        current_app.logger.exception("detect_upload 함수 예외")
+        return jsonify({"ok": False, "error": f"서버 내부 오류: {e}"}), 500
 
 
-
-
-
-
+# 간단 util (필요시 파일 상단에 추가)
+def guess_ext_from_headers_or_url(content_type: str | None, url: str) -> str:
+    # content-type 우선
+    mapping = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "image/bmp": ".bmp",
+    }
+    if content_type and content_type.split(";")[0].strip().lower() in mapping:
+        return mapping[content_type.split(";")[0].strip().lower()]
+    # URL fallback
+    parsed = url.split("?")[0].lower()
+    for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]:
+        if parsed.endswith(ext):
+            return ".jpg" if ext == ".jpeg" else ext
+    return ".jpg"
 
 
 @web_bp.route('/multi', methods=['GET'])
@@ -340,14 +355,12 @@ def multi_page():
     return render_template('multi.html')
 
 
-
-
 @main_bp.route('/detect-multi', methods=['POST'])
 def detect_multi():
     results = []
     try:
         # 폼에서 넘어온 cleanup 옵션 (체크박스 on → true)
-        cleanup = (request.form.get('cleanup', '').lower() in ['1','true','on','yes'])
+        cleanup = (request.form.get('cleanup', '').lower() in ['1', 'true', 'on', 'yes'])
 
         if "images" not in request.files:
             return jsonify({"error": "업로드된 이미지가 없습니다."}), 400
@@ -365,11 +378,6 @@ def detect_multi():
             unique = f"{uuid.uuid4().hex}_{filename}"
             filepath = os.path.join(upload_folder, unique)
             file.save(filepath)
-
-            try:
-                resize_image(filepath)
-            except Exception as e:
-                current_app.logger.warning(f"[multi] resize 실패: {e}")
 
             try:
                 result_label, score, _ = detect_and_classify(filepath)
@@ -417,5 +425,6 @@ def detect_multi():
         return jsonify({"summary": summary, "results": results}), 200
 
     except Exception as e:
+        current_app.logger.error(f"/api/detect-multi 예외: {e}")
         return jsonify({"error": f"서버 내부 오류: {str(e)}"}), 500
 

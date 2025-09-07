@@ -1,63 +1,178 @@
 {% extends "base.html" %}
 
+{% block head_extra %}
+<style>
+  .upload-wrap{max-width:680px;margin:0 auto}
+  .helper{color:#6b7280;font-size:13px;margin-top:6px}
+  .dropzone{
+    border:2px dashed #cbd5e1;border-radius:16px;padding:28px;text-align:center;background:#fafdfb;
+    transition:border-color .2s, background .2s; cursor:pointer;
+  }
+  .dropzone.dragover{background:#f3faf3;border-color:#a7d3a7}
+  .preview-thumb img{max-width:260px;border-radius:12px;margin-top:12px;border:1px solid #eef1ee}
+  .btns{display:flex;gap:10px;justify-content:center;margin-top:12px}
+  .custom-btn{
+    padding:10px 20px;background-color:#cde2c1;color:#2d572c;font-weight:bold;border:none;border-radius:30px;cursor:pointer;
+    display:inline-block;text-align:center;transition:background-color .2s ease;
+  }
+  .custom-btn:hover{background-color:#b7d5a5}
+  .custom-btn[disabled]{opacity:.6;cursor:not-allowed}
+</style>
+{% endblock %}
+
 {% block content %}
-  <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 30px;">
-    딥페이크 이미지 탐지
-  </h1>
+  <div class="upload-wrap">
+    <h1 style="font-size:28px;font-weight:bold;margin-bottom:18px;">딥페이크 이미지 탐지</h1>
 
-  {% if current_user.is_authenticated %}
-    <form action="{{ url_for('web.upload_web') }}"
-          method="post"
-          enctype="multipart/form-data"
-          style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+    {% if current_user.is_authenticated %}
+      <!-- 기존 구조 유지: 폼 제출 시 result.html로 이동 -->
+      <form id="uploadForm"
+            action="{{ url_for('web.upload_web') }}"
+            method="post"
+            enctype="multipart/form-data"
+            novalidate>
 
-      <!-- 숨겨진 input + 커스텀 label 버튼 -->
-      <input type="file"
-             id="fileInput"
-             name="image"
-             accept="image/*, video/*"
-             required
-             style="display: none;">
-      <label for="fileInput" class="custom-btn">파일 선택</label>
-      <span id="fileName" style="color: #555;"></span>
+        <!-- 숨김 파일 인풋(이미지 전용) -->
+        <input type="file" id="fileInput" name="image" accept="image/*" required style="display:none">
 
-      <!-- 업로드 버튼 -->
-      <button type="submit" class="custom-btn">업로드 및 분석</button>
-    </form>
+        <!-- 드래그&드롭 영역 (클릭해도 파일 선택) -->
+        <div id="dropzone" class="dropzone" tabindex="0" aria-label="이미지 드래그&드롭 또는 클릭하여 선택">
+          <p style="margin:0 0 6px;font-weight:700;color:#1f3f20;">이미지를 여기로 드래그&드롭</p>
+          <p class="helper">또는 아래 버튼으로 선택하세요 (PNG, JPG, JPEG · 최대 10MB)</p>
 
-    <style>
-      .custom-btn {
-        padding: 10px 20px;
-        background-color: #cde2c1;
-        color: #2d572c;
-        font-weight: bold;
-        border: none;
-        border-radius: 30px;
-        cursor: pointer;
-        display: inline-block;
-        text-align: center;
-        transition: background-color 0.2s ease;
-      }
+          <div class="btns">
+            <button type="button" id="pickBtn" class="custom-btn">파일 선택</button>
+            <button type="submit" id="submitBtn" class="custom-btn" disabled>업로드 및 분석</button>
+          </div>
 
-      .custom-btn:hover {
-        background-color: #b7d5a5;
-      }
-    </style>
+          <!-- 파일명/미리보기 -->
+          <div id="fileName" class="helper" aria-live="polite"></div>
+          <div id="preview" class="preview-thumb" aria-live="polite"></div>
+        </div>
+      </form>
 
-    <script>
-      // 선택한 파일 이름 표시
-      const fileInput = document.getElementById('fileInput');
-      const fileNameSpan = document.getElementById('fileName');
+      <!-- (6) 분석 가이드 & 개인정보 안내 -->
+      <details style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#fff;margin-top:18px">
+        <summary style="cursor:pointer;font-weight:800;color:#1f3f20">분석 가이드 & 개인정보 안내</summary>
+        <ul style="margin:12px 0 0 18px; color:#374151; font-size:14px; line-height:1.5;">
+          <li>지원 확장자: <b>PNG, JPG, JPEG</b> (최대 <b>10MB</b>)</li>
+          <li>이미지는 모델 추론을 위해 서버에 일시 저장될 수 있습니다.</li>
+          <li>정면, 충분한 해상도의 이미지가 더 정확합니다.</li>
+          <li>의심스러운 저작물/민감 이미지의 업로드는 지양해 주세요.</li>
+        </ul>
+      </details>
 
-      fileInput.addEventListener('change', function () {
-        fileNameSpan.textContent = this.files[0] ? this.files[0].name : '';
-      });
-    </script>
-  {% else %}
-    <p>
-      <a href="{{ url_for('auth.login') }}" style="color: #2d572c;">로그인</a>
-      후 이용 가능합니다.
-    </p>
-  {% endif %}
+      <script>
+        (function(){
+          const MAX_MB = 10;                       // 최대 용량
+          const ALLOWED_EXT = /\.(png|jpe?g)$/i;   // 허용 확장자
+
+          const form = document.getElementById('uploadForm');
+          const drop = document.getElementById('dropzone');
+          const input = document.getElementById('fileInput');
+          const pickBtn = document.getElementById('pickBtn');
+          const submitBtn = document.getElementById('submitBtn');
+          const nameBox = document.getElementById('fileName');
+          const preview = document.getElementById('preview');
+
+          let selectedFile = null;
+
+          function resetPreview(){
+            nameBox.textContent = '';
+            preview.innerHTML = '';
+          }
+
+          function showPreview(file){
+            resetPreview();
+            nameBox.textContent = file.name + ' · ' + Math.ceil(file.size/1024) + ' KB';
+            if (file.type && file.type.startsWith('image/')) {
+              const img = document.createElement('img');
+              img.alt = '미리보기';
+              img.src = URL.createObjectURL(file);
+              img.onload = () => URL.revokeObjectURL(img.src);
+              preview.appendChild(img);
+            }
+          }
+
+          function validateImage(file){
+            if (!file) return '파일이 선택되지 않았습니다.';
+            if (!file.type || !file.type.startsWith('image/')) return '이미지 파일만 업로드할 수 있습니다.';
+            if (!ALLOWED_EXT.test(file.name || '')) return 'PNG, JPG, JPEG만 허용됩니다.';
+            if (file.size > MAX_MB * 1024 * 1024) return `파일 용량이 너무 큽니다. (최대 ${MAX_MB}MB)`;
+            return null;
+          }
+
+          function setFile(file){
+            const err = validateImage(file);
+            if (err){
+              alert(err);
+              selectedFile = null;
+              submitBtn.disabled = true;
+              input.value = '';
+              resetPreview();
+              return;
+            }
+            selectedFile = file;
+            submitBtn.disabled = false;
+            showPreview(file);
+
+            // 드래그&드롭으로 받은 파일을 실제 input에 주입 (폼 제출 유지)
+            try {
+              const dt = new DataTransfer();
+              dt.items.add(file);
+              input.files = dt.files;
+            } catch(e) {
+              // 일부 구형 브라우저는 실패할 수 있음. 이 경우 클릭 선택만 허용.
+            }
+          }
+
+          // 버튼/클릭
+          pickBtn.onclick = () => input.click();
+          drop.addEventListener('click', (e)=> {
+            if (e.target === pickBtn || e.target === submitBtn) return;
+            input.click();
+          });
+
+          // 키보드 접근성
+          drop.addEventListener('keydown', (e)=> {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+          });
+
+          // 파일 선택
+          input.onchange = () => setFile(input.files[0] || null);
+
+          // 드래그&드롭
+          ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover');
+          }));
+          ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover');
+          }));
+          drop.addEventListener('drop', e => {
+            const f = e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f) setFile(f);
+          });
+
+          // 붙여넣기 업로드
+          window.addEventListener('paste', (e) => {
+            const item = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
+            if (item) setFile(item);
+          });
+
+          // 제출 시 잠금
+          form.addEventListener('submit', () => {
+            submitBtn.disabled = true;
+            pickBtn.disabled = true;
+            submitBtn.textContent = '분석 중...';
+          });
+        })();
+      </script>
+
+    {% else %}
+      <p>
+        <a href="{{ url_for('auth.login') }}" style="color:#2d572c;">로그인</a> 후 이용 가능합니다.
+      </p>
+    {% endif %}
+  </div>
 {% endblock %}
 

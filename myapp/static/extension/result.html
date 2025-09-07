@@ -1,53 +1,129 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>딥페이크 분석 결과</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #f4f4f4;
-    padding: 15px;
-    text-align: center;
-  }
-  .card {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    max-width: 500px;
-    margin: auto;
-  }
-  .result {
-    font-size: 20px;
-    font-weight: bold;
-    margin: 10px 0;
-  }
-  .result.Real { color: green; }
-  .result.Fake { color: red; }
-  .result.NoFace, .result.Error { color: gray; }
-  #previewImage {
-    width: 100%;
-    max-height: 400px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-  }
-  .score {
-    font-size: 14px;
-    color: #666;
-    margin-top: 5px;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>딥페이크 분석 결과</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #f7faf7;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --real: #16a34a;
+      --fake: #dc2626;
+      --neutral: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.06);
+      padding: 16px;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      color: #2d572c;
+      text-align: center;
+    }
+    #previewImage {
+      width: 100%;
+      max-height: 420px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #f3f4f6;
+    }
+    .result {
+      margin: 12px 0 6px;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .result.Real { color: var(--real); }
+    .result.Fake { color: var(--fake); }
+    .result.NoFace,
+    .result.Uncertain,
+    .result.Error { color: var(--neutral); }
+    .score {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:hover { background: #eef2f7; }
+  </style>
 </head>
 <body>
-  <div class="card">
-    <img id="previewImage" src="" alt="분석 이미지">
-    <p id="resultText" class="result">결과 없음</p>
-    <p id="scoreText" class="score">신뢰도: -</p>
+  <div class="wrap">
+    <div class="card">
+      <h1 class="title">딥페이크 분석 결과</h1>
+
+      <img id="previewImage" src="icon.png" alt="분석 이미지 미리보기" />
+
+      <p id="resultText" class="result">결과 없음</p>
+      <p id="scoreText" class="score">신뢰도: -</p>
+
+      <p class="hint">
+        마지막 검사 결과를 표시합니다. 이미지가 아이콘으로 보인다면
+        서버 저장본(<code>preview_url</code>)이 없었던 경우일 수 있어요.
+      </p>
+
+      <div class="actions">
+        <button class="btn" id="refreshBtn">새로고침</button>
+        <button class="btn" id="openSiteBtn">사이트 열기</button>
+      </div>
+    </div>
   </div>
-<script src="result.js"></script>
+
+  <script>
+    // 선택: 새로고침/사이트 열기 핸들러 (편의 기능)
+    document.getElementById('refreshBtn')?.addEventListener('click', () => {
+      // 스토리지에서 다시 읽도록 단순 리로드
+      location.reload();
+    });
+    document.getElementById('openSiteBtn')?.addEventListener('click', () => {
+      // 필요 시 결과 페이지나 메인으로 연결
+      chrome.tabs?.create?.({ url: "https://aiholmez.com/" });
+    });
+  </script>
+  <script src="result.js"></script>
 </body>
 </html>
 

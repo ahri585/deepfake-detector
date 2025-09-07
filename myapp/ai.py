@@ -1,4 +1,4 @@
-# ai.py — 통합판 (학습=추론 아님, 판별용)
+# ai.py — 통합판 (학습=추론 아님, 판별용)  ✅ NoFace 보장 버전
 import os
 import cv2
 import torch
@@ -10,9 +10,7 @@ import numpy as np
 # =========================
 # ✅ 고정 설정/옵션
 # =========================
-# 모델 파일(.pth) 경로 — 너 파일명으로 바꿔줘!
 MODEL_PATH = "/home/ubuntu/deepfake-detector/myapp/models/dm2.pth"
-# MODEL_PATH = "/home/ubuntu/deepfake-detector/myapp/models/dm2"  # ← 이게 '폴더'면 안 됨. 파일이어야 함.
 
 # 학습자가 확정해준 매핑
 FAKE_IDX, REAL_IDX = 0, 1
@@ -23,7 +21,15 @@ USE_FACE_CROP = False          # 지표 코드와 맞추려면 False(전체 프�
 SELECT_LARGEST_FACE = True     # 여러 얼굴 중 가장 큰 얼굴 선택
 THRESH = None                  # 예: 0.6 넣으면 확신 낮으면 'Uncertain'로 반환
 
-# (선택) 완전 동일 결과가 중요할 때 결정론 모드
+# (중요) 얼굴 없으면 NoFace를 '반드시' 반환할지
+ENFORCE_NOFACE = True          # True 추천
+
+# 얼굴검출 기본 파라미터
+FACE_MIN_SIZE = (60, 60)
+FACE_SCALE = 1.2
+FACE_NEIGHBORS = 4
+
+# (선택) 완전 동일 결과를 원하면 결정론 모드
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
@@ -55,15 +61,12 @@ def _build_model_from_state_dict(state_dict: dict) -> torch.nn.Module:
     return model
 
 def _load_model():
-    # PyTorch 2.6부터 weights_only=True 기본이라 타입 대응
     ckpt = None
     try:
         ckpt = torch.load(MODEL_PATH, map_location=device, weights_only=True)
     except TypeError:
-        # 구버전 호환
         ckpt = torch.load(MODEL_PATH, map_location=device)
     except Exception as e:
-        # 안전 로드 실패 시, 경고 후 일반 로드 재시도
         print(f"[ai] safe load 실패: {e}\n[ai] weights_only=False 로 재시도합니다(신뢰 가능한 파일만 사용).")
         ckpt = torch.load(MODEL_PATH, map_location=device, weights_only=False)
 
@@ -76,7 +79,6 @@ def _load_model():
         raise RuntimeError(f"[ai] 지원하지 않는 체크포인트 타입: {type(ckpt)}")
 
     model.eval().to(device)
-    # 매핑 로그 한 번만 출력
     if not getattr(model, "_printed_mapping", False):
         print(f"[ai] CLASS_MAPPING: {FAKE_IDX}=Fake, {REAL_IDX}=Real")
         model._printed_mapping = True
@@ -94,13 +96,39 @@ transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225])
 ])
 
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+# Haar 경로 준비 (없으면 None)
+HAAR_PATH = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml") \
+    if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades") else None
+face_cascade = cv2.CascadeClassifier(HAAR_PATH) if (HAAR_PATH and os.path.exists(HAAR_PATH)) else None
 
 def _prep_pil(img_bgr: np.ndarray) -> Image.Image:
     # OpenCV BGR -> RGB, EXIF 회전 보정
     pil = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
     pil = ImageOps.exif_transpose(pil)
     return pil
+
+def _detect_faces(img_bgr: np.ndarray):
+    """성공 시 얼굴 리스트, 실패(검출기 없음/예외) 시 None."""
+    if img_bgr is None:
+        return None
+    if face_cascade is None:
+        # 검출기 자체가 없으면 None
+        return None
+    try:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(
+            gray, scaleFactor=FACE_SCALE, minNeighbors=FACE_NEIGHBORS, minSize=FACE_MIN_SIZE
+        )
+        return faces  # list-like
+    except Exception as _:
+        return None
+
+def _pick_face(faces):
+    if faces is None or len(faces) == 0:
+        return None
+    if SELECT_LARGEST_FACE:
+        return max(faces, key=lambda b: b[2] * b[3])
+    return faces[0]
 
 # =========================
 # ✅ 판별 함수 (서비스에서 호출)
@@ -109,6 +137,13 @@ def detect_and_classify(image_path: str):
     """
     반환: (label:str, confidence:float, image_path:str)
     label ∈ {"Fake","Real","Uncertain","NoFace","Error"}
+    정책:
+      - ENFORCE_NOFACE=True일 때
+        * 얼굴검출기 실패(None) 또는 탐지 0개 → "NoFace"
+      - USE_FACE_CROP=True일 때
+        * 얼굴 1개 이상이면 crop 후 분류
+      - USE_FACE_CROP=False일 때
+        * 전체 프레임 분류(단, ENFORCE_NOFACE가 True면 사전 얼굴체크로 NoFace 보장)
     """
     try:
         original = cv2.imread(image_path)
@@ -116,22 +151,24 @@ def detect_and_classify(image_path: str):
             print(f"❌ 이미지 로딩 실패: {image_path}")
             return "Error", 0.0, image_path
 
+        # --- 얼굴 유무 선검사 ---
+        faces = _detect_faces(original)
+
+        if ENFORCE_NOFACE:
+            # 검출기 실패(None) 또는 탐지 0개 → 일관되게 NoFace
+            if faces is None or len(faces) == 0:
+                return "NoFace", 0.0, image_path
+
         # --- 얼굴 크롭 정책 ---
         if USE_FACE_CROP:
-            gray = cv2.cvtColor(original, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(
-                gray, scaleFactor=1.2, minNeighbors=4, minSize=(60, 60)
-            )
-            if len(faces) == 0:
-                # 얼굴을 못 찾으면 지표 코드와 동일하게 전체 프레임 사용
-                pil = _prep_pil(original)
-            else:
-                x, y, w, h = (max(faces, key=lambda b: b[2] * b[3])
-                              if SELECT_LARGEST_FACE else faces[0])
-                face_img = original[y:y + h, x:x + w]
-                pil = _prep_pil(face_img)
+            if faces is None or len(faces) == 0:
+                # 크롭 모드인데 얼굴이 없으면 NoFace
+                return "NoFace", 0.0, image_path
+            x, y, w, h = _pick_face(faces)
+            face_img = original[y:y + h, x:x + w]
+            pil = _prep_pil(face_img)
         else:
-            # 지표 코드와 동일: 크롭 없이 전체 프레임
+            # 전체 프레임 사용
             pil = _prep_pil(original)
 
         # --- 전처리/추론 ---

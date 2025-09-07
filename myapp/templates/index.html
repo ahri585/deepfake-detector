@@ -2,6 +2,48 @@
 
 {% block head_extra %}
 <style>
+  /* ===== 공통 레이아웃 ===== */
+  .container{max-width:1100px;margin:0 auto;padding:0 16px}
+  .hero{
+    background: linear-gradient(180deg,#f7fbf7 0%, #ffffff 100%);
+    border:1px solid #e6efe6; border-radius:20px; padding:32px; margin:18px 0 24px 0;
+  }
+  .hero h1{font-size:30px;margin:0 0 8px;color:#1f3f20}
+  .hero p{margin:0;color:#47624a}
+  .hero-cta{display:flex;gap:10px;margin-top:14px}
+  .btn-outline{
+    padding:10px 18px;border:1px solid #9cc59f;border-radius:30px;background:#fff;color:#2d572c;
+    font-weight:700;cursor:pointer;text-decoration:none;display:inline-block
+  }
+  .btn-outline:hover{background:#f0f7f0}
+
+  .kicker{display:inline-block;font-size:12px;color:#2d572c;background:#e8f2e8;border:1px solid #d6ead6;padding:3px 8px;border-radius:999px;margin-bottom:8px}
+
+  /* ===== 특징 그리드 ===== */
+  .grid{display:grid;gap:14px}
+  @media(min-width:768px){.grid.cols-3{grid-template-columns:repeat(3,1fr)}}
+  .card{
+    border:1px solid #e6efe6;border-radius:16px;background:#fff;padding:18px;height:100%;
+  }
+  .card h3{margin:0 0 6px;color:#204a22;font-size:18px}
+  .card p{margin:0;color:#586e5b;font-size:14px;line-height:1.5}
+
+  /* ===== 단계 섹션 ===== */
+  .steps{display:grid;gap:12px}
+  @media(min-width:768px){.steps{grid-template-columns:repeat(3,1fr)}}
+  .step{
+    border:1px dashed #cfe2cf;border-radius:14px;padding:16px;background:#fbfefb;
+  }
+  .step .num{
+    width:26px;height:26px;border-radius:999px;background:#cde2c1;color:#1f3f20;font-weight:800;
+    display:inline-flex;align-items:center;justify-content:center;margin-right:8px
+  }
+
+  /* ===== 신뢰/배지 ===== */
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .badge{font-size:12px;border:1px solid #e6efe6;background:#fff;border-radius:999px;padding:6px 10px;color:#47624a}
+
+  /* ===== 기존 업로드 UI (원본 유지 + 살짝 여백 보정) ===== */
   .upload-wrap{max-width:680px;margin:0 auto}
   .helper{color:#6b7280;font-size:13px;margin-top:6px}
   .dropzone{
@@ -21,158 +63,176 @@
 {% endblock %}
 
 {% block content %}
-  <div class="upload-wrap">
-    <h1 style="font-size:28px;font-weight:bold;margin-bottom:18px;">딥페이크 이미지 탐지</h1>
+<div class="container">
 
-    {% if current_user.is_authenticated %}
-      <!-- 기존 구조 유지: 폼 제출 시 result.html로 이동 -->
-      <form id="uploadForm"
-            action="{{ url_for('web.upload_web') }}"
-            method="post"
-            enctype="multipart/form-data"
-            novalidate>
+  <!-- HERO / 소개 -->
+  <section class="hero">
+    <span class="kicker">AI Holmez · Deepfake Detector</span>
+    <h1>딥페이크 이미지 탐지</h1>
+    <p>EfficientNet + PyTorch 기반의 정밀 탐지. 안전하고 빠르게 결과를 확인하세요.</p>
 
-        <!-- 숨김 파일 인풋(이미지 전용) -->
-        <input type="file" id="fileInput" name="image" accept="image/*" required style="display:none">
-
-        <!-- 드래그&드롭 영역 (클릭해도 파일 선택) -->
-        <div id="dropzone" class="dropzone" tabindex="0" aria-label="이미지 드래그&드롭 또는 클릭하여 선택">
-          <p style="margin:0 0 6px;font-weight:700;color:#1f3f20;">이미지를 여기로 드래그&드롭</p>
-          <p class="helper">또는 아래 버튼으로 선택하세요 (PNG, JPG, JPEG · 최대 10MB)</p>
-
-          <div class="btns">
-            <button type="button" id="pickBtn" class="custom-btn">파일 선택</button>
-            <button type="submit" id="submitBtn" class="custom-btn" disabled>업로드 및 분석</button>
-          </div>
-
-          <!-- 파일명/미리보기 -->
-          <div id="fileName" class="helper" aria-live="polite"></div>
-          <div id="preview" class="preview-thumb" aria-live="polite"></div>
-        </div>
-      </form>
-
-      <!-- (6) 분석 가이드 & 개인정보 안내 -->
-      <details style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#fff;margin-top:18px">
-        <summary style="cursor:pointer;font-weight:800;color:#1f3f20">분석 가이드 & 개인정보 안내</summary>
-        <ul style="margin:12px 0 0 18px; color:#374151; font-size:14px; line-height:1.5;">
-          <li>지원 확장자: <b>PNG, JPG, JPEG</b> (최대 <b>10MB</b>)</li>
-          <li>이미지는 모델 추론을 위해 서버에 일시 저장될 수 있습니다.</li>
-          <li>정면, 충분한 해상도의 이미지가 더 정확합니다.</li>
-          <li>의심스러운 저작물/민감 이미지의 업로드는 지양해 주세요.</li>
-        </ul>
-      </details>
-
-      <script>
-        (function(){
-          const MAX_MB = 10;                       // 최대 용량
-          const ALLOWED_EXT = /\.(png|jpe?g)$/i;   // 허용 확장자
-
-          const form = document.getElementById('uploadForm');
-          const drop = document.getElementById('dropzone');
-          const input = document.getElementById('fileInput');
-          const pickBtn = document.getElementById('pickBtn');
-          const submitBtn = document.getElementById('submitBtn');
-          const nameBox = document.getElementById('fileName');
-          const preview = document.getElementById('preview');
-
-          let selectedFile = null;
-
-          function resetPreview(){
-            nameBox.textContent = '';
-            preview.innerHTML = '';
-          }
-
-          function showPreview(file){
-            resetPreview();
-            nameBox.textContent = file.name + ' · ' + Math.ceil(file.size/1024) + ' KB';
-            if (file.type && file.type.startsWith('image/')) {
-              const img = document.createElement('img');
-              img.alt = '미리보기';
-              img.src = URL.createObjectURL(file);
-              img.onload = () => URL.revokeObjectURL(img.src);
-              preview.appendChild(img);
-            }
-          }
-
-          function validateImage(file){
-            if (!file) return '파일이 선택되지 않았습니다.';
-            if (!file.type || !file.type.startsWith('image/')) return '이미지 파일만 업로드할 수 있습니다.';
-            if (!ALLOWED_EXT.test(file.name || '')) return 'PNG, JPG, JPEG만 허용됩니다.';
-            if (file.size > MAX_MB * 1024 * 1024) return `파일 용량이 너무 큽니다. (최대 ${MAX_MB}MB)`;
-            return null;
-          }
-
-          function setFile(file){
-            const err = validateImage(file);
-            if (err){
-              alert(err);
-              selectedFile = null;
-              submitBtn.disabled = true;
-              input.value = '';
-              resetPreview();
-              return;
-            }
-            selectedFile = file;
-            submitBtn.disabled = false;
-            showPreview(file);
-
-            // 드래그&드롭으로 받은 파일을 실제 input에 주입 (폼 제출 유지)
-            try {
-              const dt = new DataTransfer();
-              dt.items.add(file);
-              input.files = dt.files;
-            } catch(e) {
-              // 일부 구형 브라우저는 실패할 수 있음. 이 경우 클릭 선택만 허용.
-            }
-          }
-
-          // 버튼/클릭
-          pickBtn.onclick = () => input.click();
-          drop.addEventListener('click', (e)=> {
-            if (e.target === pickBtn || e.target === submitBtn) return;
-            input.click();
-          });
-
-          // 키보드 접근성
-          drop.addEventListener('keydown', (e)=> {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
-          });
-
-          // 파일 선택
-          input.onchange = () => setFile(input.files[0] || null);
-
-          // 드래그&드롭
-          ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
-            e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover');
-          }));
-          ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
-            e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover');
-          }));
-          drop.addEventListener('drop', e => {
-            const f = e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f) setFile(f);
-          });
-
-          // 붙여넣기 업로드
-          window.addEventListener('paste', (e) => {
-            const item = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0];
-            if (item) setFile(item);
-          });
-
-          // 제출 시 잠금
-          form.addEventListener('submit', () => {
-            submitBtn.disabled = true;
-            pickBtn.disabled = true;
-            submitBtn.textContent = '분석 중...';
-          });
-        })();
-      </script>
-
+    {% if not current_user.is_authenticated %}
+      <div class="hero-cta">
+        <a class="btn-outline" href="{{ url_for('auth.login') }}">로그인</a>
+        <a class="btn-outline" href="{{ url_for('auth.register') }}">회원가입</a>
+      </div>
+      <div class="badges">
+        <span class="badge">웹 · 안드로이드 · 크롬 확장 지원</span>
+        <span class="badge">서버 전송 최소화</span>
+        <span class="badge">Capstone Team Holmez</span>
+      </div>
     {% else %}
-      <p>
-        <a href="{{ url_for('auth.login') }}" style="color:#2d572c;">로그인</a> 후 이용 가능합니다.
-      </p>
+      <div class="badges">
+        <span class="badge">로그인됨: {{ current_user.username }}</span>
+        <span class="badge">안전한 업로드</span>
+        <span class="badge">실시간 추론</span>
+      </div>
     {% endif %}
-  </div>
+  </section>
+
+  {% if current_user.is_authenticated %}
+  <!-- 업로드 드롭존 (원본 기능 그대로) -->
+  <section class="upload-wrap">
+    <form id="uploadForm"
+          action="{{ url_for('web.upload_web') }}"
+          method="post"
+          enctype="multipart/form-data"
+          novalidate>
+
+      <input type="file" id="fileInput" name="image" accept="image/*" required style="display:none">
+
+      <div id="dropzone" class="dropzone" tabindex="0" aria-label="이미지 드래그&드롭 또는 클릭하여 선택">
+        <p style="margin:0 0 6px;font-weight:700;color:#1f3f20;">이미지를 여기로 드래그&드롭</p>
+        <p class="helper">또는 아래 버튼으로 선택하세요 (PNG, JPG, JPEG · 최대 10MB)</p>
+
+        <div class="btns">
+          <button type="button" id="pickBtn" class="custom-btn">파일 선택</button>
+          <button type="submit" id="submitBtn" class="custom-btn" disabled>업로드 및 분석</button>
+        </div>
+
+        <div id="fileName" class="helper" aria-live="polite"></div>
+        <div id="preview" class="preview-thumb" aria-live="polite"></div>
+      </div>
+    </form>
+
+    <details style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;background:#fff;margin-top:18px">
+      <summary style="cursor:pointer;font-weight:800;color:#1f3f20">분석 가이드 & 개인정보 안내</summary>
+      <ul style="margin:12px 0 0 18px; color:#374151; font-size:14px; line-height:1.5;">
+        <li>지원 확장자: <b>PNG, JPG, JPEG</b> (최대 <b>10MB</b>)</li>
+        <li>이미지는 모델 추론을 위해 서버에 일시 저장될 수 있습니다.</li>
+        <li>정면, 충분한 해상도의 이미지가 더 정확합니다.</li>
+        <li>의심스러운 저작물/민감 이미지의 업로드는 지양해 주세요.</li>
+      </ul>
+    </details>
+  </section>
+  {% endif %}
+
+  <!-- 특징 카드 -->
+  <section style="margin:28px 0 10px">
+    <div class="grid cols-3">
+      <div class="card">
+        <h3>정확한 분석</h3>
+        <p>EfficientNet-B3와 사전 전처리를 통해 Real / Fake / NoFace를 구분합니다.</p>
+      </div>
+      <div class="card">
+        <h3>간편한 사용</h3>
+        <p>드래그&드롭, 붙여넣기 업로드, 모바일/웹/확장프로그램까지 간편하게.</p>
+      </div>
+      <div class="card">
+        <h3>안전한 처리</h3>
+        <p>필요 최소한의 데이터만 처리하고, 서버 내 보관을 최소화합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 사용 방법 (3단계) -->
+  <section style="margin:14px 0 6px">
+    <h2 style="font-size:20px;color:#1f3f20;margin:0 0 10px">사용 방법</h2>
+    <div class="steps">
+      <div class="step"><span class="num">1</span><strong>이미지 선택</strong><br><span class="helper">드래그&드롭 또는 파일 선택 버튼</span></div>
+      <div class="step"><span class="num">2</span><strong>업로드 및 분석</strong><br><span class="helper">서버에서 자동 전처리·추론</span></div>
+      <div class="step"><span class="num">3</span><strong>결과 확인</strong><br><span class="helper">Real / Fake / NoFace 결과와 확률</span></div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section style="margin:18px 0 40px">
+    <h2 style="font-size:20px;color:#1f3f20;margin:0 0 8px">FAQ</h2>
+    <details class="card" style="margin-bottom:8px">
+      <summary style="cursor:pointer;font-weight:700;color:#204a22">딥페이크 탐지는 어떻게 하나요?</summary>
+      <p class="helper" style="margin-top:8px">얼굴 검출 → 전처리 → EfficientNet-B3 추론을 통해 결과를 제공합니다.</p>
+    </details>
+    <details class="card" style="margin-bottom:8px">
+      <summary style="cursor:pointer;font-weight:700;color:#204a22">이미지는 저장되나요?</summary>
+      <p class="helper" style="margin-top:8px">분석을 위해 일시 저장될 수 있으며, 운영 정책에 따라 주기적으로 정리됩니다.</p>
+    </details>
+    <details class="card">
+      <summary style="cursor:pointer;font-weight:700;color:#204a22">모바일/확장프로그램도 지원하나요?</summary>
+      <p class="helper" style="margin-top:8px">웹 외에도 안드로이드 앱, 크롬 확장 프로그램으로 편하게 분석할 수 있어요.</p>
+    </details>
+  </section>
+</div>
+
+{% if current_user.is_authenticated %}
+<script>
+  (function(){
+    const MAX_MB = 10;
+    const ALLOWED_EXT = /\.(png|jpe?g)$/i;
+
+    const form = document.getElementById('uploadForm');
+    const drop = document.getElementById('dropzone');
+    const input = document.getElementById('fileInput');
+    const pickBtn = document.getElementById('pickBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const nameBox = document.getElementById('fileName');
+    const preview = document.getElementById('preview');
+
+    let selectedFile = null;
+
+    function resetPreview(){ nameBox.textContent = ''; preview.innerHTML = ''; }
+    function showPreview(file){
+      resetPreview();
+      nameBox.textContent = file.name + ' · ' + Math.ceil(file.size/1024) + ' KB';
+      if (file.type && file.type.startsWith('image/')){
+        const img = document.createElement('img');
+        img.alt = '미리보기'; img.src = URL.createObjectURL(file);
+        img.onload = () => URL.revokeObjectURL(img.src);
+        preview.appendChild(img);
+      }
+    }
+    function validateImage(file){
+      if (!file) return '파일이 선택되지 않았습니다.';
+      if (!file.type || !file.type.startsWith('image/')) return '이미지 파일만 업로드할 수 있습니다.';
+      if (!ALLOWED_EXT.test(file.name || '')) return 'PNG, JPG, JPEG만 허용됩니다.';
+      if (file.size > MAX_MB * 1024 * 1024) return `파일 용량이 너무 큽니다. (최대 ${MAX_MB}MB)`;
+      return null;
+    }
+    function setFile(file){
+      const err = validateImage(file);
+      if (err){ alert(err); selectedFile=null; submitBtn.disabled=true; input.value=''; resetPreview(); return; }
+      selectedFile = file; submitBtn.disabled=false; showPreview(file);
+      try{ const dt=new DataTransfer(); dt.items.add(file); input.files=dt.files; }catch(e){}
+    }
+
+    pickBtn.onclick = () => input.click();
+    drop.addEventListener('click', (e)=>{ if(e.target===pickBtn || e.target===submitBtn) return; input.click(); });
+    drop.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); input.click(); }});
+    input.onchange = () => setFile(input.files[0] || null);
+
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover'); }));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover'); }));
+    drop.addEventListener('drop', e => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setFile(f); });
+
+    window.addEventListener('paste', (e) => { const item = e.clipboardData && e.clipboardData.files && e.clipboardData.files[0]; if (item) setFile(item); });
+
+    form.addEventListener('submit', () => { submitBtn.disabled = true; pickBtn.disabled = true; submitBtn.textContent = '분석 중...'; });
+  })();
+</script>
+{% else %}
+<!-- 비로그인 안내 텍스트 (간결) -->
+<div class="container" style="margin-top:-8px">
+  <p class="helper">로그인 후 이미지 업로드가 가능합니다. 상단의 <b>로그인 / 회원가입</b> 버튼을 눌러 시작하세요.</p>
+</div>
+{% endif %}
 {% endblock %}
 

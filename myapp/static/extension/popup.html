@@ -1,21 +1,102 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>딥페이크 검사</title>
-<style>
-  body { font-family: Arial, sans-serif; padding: 10px; width: 320px; }
-  h3 { color: #2d572c; font-size: 16px; margin-bottom: 10px; }
-  #preview img { max-width: 100%; margin-top: 10px; border: 1px solid #ccc; }
-  #result { margin-top: 10px; font-size: 14px; }
-</style>
+  <meta charset="UTF-8">
+  <title>Deepfake Detector</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      width: 360px;
+      padding: 12px;
+      margin: 0;
+      background: #f9fafb;
+    }
+    h1 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #2d572c;
+    }
+    .section {
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 12px;
+      background: #fff;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="file"],
+    input[type="url"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+    }
+    button {
+      margin-top: 8px;
+      padding: 6px 12px;
+      background-color: #4ade80;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color .2s;
+    }
+    button:hover {
+      background-color: #22c55e;
+    }
+    #preview {
+      text-align: center;
+      margin-top: 8px;
+    }
+    #preview img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    #result {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 8px;
+      color: #111827;
+    }
+  </style>
 </head>
 <body>
-  <h3>이미지 업로드 검사</h3>
-  <input type="file" id="imageInput" accept="image/*">
-  <div id="preview"></div>
-  <div id="result">결과가 여기에 표시됩니다.</div>
-<script src="popup.js"></script>
+  <h1>Deepfake Detector</h1>
+
+  <!-- 파일 업로드 -->
+  <div class="section">
+    <label for="imageInput">파일 업로드</label>
+    <input type="file" id="imageInput" accept="image/*" />
+  </div>
+
+  <!-- URL 검사 -->
+  <div class="section">
+    <label for="urlInput">이미지 URL 검사</label>
+    <form id="urlForm">
+      <input type="url" id="urlInput" placeholder="https://example.com/image.jpg" />
+      <button type="submit">검사하기</button>
+    </form>
+  </div>
+
+  <!-- 미리보기 -->
+  <div class="section" id="preview">
+    <span style="color:#6b7280; font-size:13px;">이미지를 업로드하거나 URL을 입력하세요.</span>
+  </div>
+
+  <!-- 결과 -->
+  <div class="section">
+    <div id="result">대기 중…</div>
+  </div>
+
+  <script src="popup.js"></script>
 </body>
 </html>
 
